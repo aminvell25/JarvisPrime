@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>J.A.R.V.I.S.</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    overflow: hidden;
+    font-family: 'Segoe UI', sans-serif;
+    cursor: none;
+  }
+  #canvas-container {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    z-index: 1;
+  }
+  #hud {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 40px;
+  }
+  .hud-top {
+    display: flex;
+    justify-content: space-between;
+    color: #00d9ff;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+  .hud-center {
+    position: absolute;
+    bottom: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: #00d9ff;
+    max-width: 700px;
+  }
+  .hud-text {
+    font-size: 20px;
+    line-height: 1.6;
+    text-shadow: 0 0 20px rgba(0,217,255,0.5);
+    min-height: 60px;
+  }
+  .hud-sub {
+    font-size: 11px;
+    color: #4d9fff;
+    margin-top: 8px;
+    letter-spacing: 1px;
+  }
+  .hud-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    color: #00d9ff;
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  .status-indicator {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    background: #00ff9f;
+    box-shadow: 0 0 10px #00ff9f;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  #waveform {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 400px; height: 60px;
+    z-index: 20;
+    pointer-events: none;
+  }
+  .thinking-bubble {
+    position: absolute;
+    color: #00d9ff;
+    font-size: 10px;
+    letter-spacing: 1px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    text-shadow: 0 0 8px rgba(0,217,255,0.4);
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="hud">
+    <div class="hud-top">
+      <div>STARK INDUSTRIES // J.A.R.V.I.S. PRIME v1.0</div>
+      <div id="clock">00:00:00</div>
+    </div>
+    <div class="hud-center">
+      <div class="hud-text" id="jarvis-text">Sistemi operativi, Signore.</div>
+      <div class="hud-sub" id="jarvis-sub">Ready</div>
+    </div>
+    <div class="hud-bottom">
+      <div><span class="status-indicator" id="status-dot"></span><span id="status-label">ONLINE</span></div>
+      <div>CPU <span id="cpu-val">--</span>% | MEM <span id="mem-val">--</span>% | GPU <span id="gpu-val">--</span>%</div>
+    </div>
+  </div>
+  <canvas id="waveform"></canvas>
+  <div id="thinking-bubbles"></div>
+  <script type="module" src="renderer.js"></script>
+</body>
+</html>

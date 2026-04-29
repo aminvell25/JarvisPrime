@@ -1,0 +1,41 @@
+{
+  "name": "jarvis-bridge",
+  "displayName": "J.A.R.V.I.S. Bridge",
+  "description": "Bridge per J.A.R.V.I.S. Prime",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "jarvis.insertCode",
+        "title": "JARVIS: Inserisci Codice"
+      },
+      {
+        "command": "jarvis.showDiagnostics",
+        "title": "JARVIS: Mostra Errori"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "20.x",
+    "@types/vscode": "^1.80.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
+  }
+}
