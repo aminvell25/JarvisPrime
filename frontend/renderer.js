@@ -170,9 +170,24 @@ function drawWave(){
   requestAnimationFrame(drawWave);
 }
 
-// TTS play
+// TTS helpers
+function isWavBuffer(buffer){
+  if(buffer.byteLength<4)return false;
+  const v=new Uint8Array(buffer,0,4);
+  return v[0]===0x52&&v[1]===0x49&&v[2]===0x46&&v[3]===0x46;
+}
+
 function playTTS(pcm,sr=24000){
   if(!ttsCtx)ttsCtx=new AudioContext({sampleRate:sr});
+  // Protezione: se arriva un WAV container invece di raw PCM
+  if(isWavBuffer(pcm)){
+    console.warn('playTTS received WAV container, routing to decodeAudioData');
+    ttsCtx.decodeAudioData(pcm.slice(0)).then(buf=>{
+      const src=ttsCtx.createBufferSource();
+      src.buffer=buf; src.connect(ttsCtx.destination); src.start();
+    }).catch(err=>console.error('WAV decode failed',err));
+    return;
+  }
   const i16=new Int16Array(pcm);
   const f32=new Float32Array(i16.length);
   for(let i=0;i<i16.length;i++)f32[i]=i16[i]/32768.0;
@@ -187,13 +202,20 @@ async function playTTSBase64(payload, format='linear16', sr=24000){
   const bin=atob(payload);
   const bytes=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
-  if(format==='wav'){
+  if(format==='wav'||isWavBuffer(bytes.buffer)){
     const audioBuffer=await ttsCtx.decodeAudioData(bytes.buffer.slice(0));
     const src=ttsCtx.createBufferSource();
     src.buffer=audioBuffer; src.connect(ttsCtx.destination); src.start();
     return;
   }
-  playTTS(bytes.buffer,sr);
+  // Path PCM raw: Uint8Array → Int16Array → Float32Array
+  const i16=new Int16Array(bytes.buffer);
+  const f32=new Float32Array(i16.length);
+  for(let i=0;i<i16.length;i++)f32[i]=i16[i]/32768.0;
+  const buf=ttsCtx.createBuffer(1,f32.length,sr);
+  buf.copyToChannel(f32,0);
+  const src=ttsCtx.createBufferSource();
+  src.buffer=buf; src.connect(ttsCtx.destination); src.start();
 }
 
 // Music play
