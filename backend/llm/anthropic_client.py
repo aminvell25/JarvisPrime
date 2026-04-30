@@ -1,5 +1,8 @@
 """Anthropic Client — Haiku + Sonnet"""
-from anthropic import Anthropic
+import logging
+from anthropic import Anthropic, RateLimitError, APIConnectionError
+
+logger = logging.getLogger(__name__)
 
 class JarvisLLM:
     def __init__(self, api_key: str):
@@ -17,7 +20,7 @@ Tono per contesto:
 - Banale: sarcasmo gentile
 - Frustrazione: piu diretto, meno ironico ma elegante"""
 
-    def ask(self, model: str, user_text: str, tool_results: list = None, mood_addon: str = "", vision_image: str = None) -> str:
+    def ask(self, model: str, user_text: str, tool_results: list = None, mood_addon: str = "", vision_image: str = None, max_tokens: int = 1024) -> str:
         system = self.base_personality + mood_addon
         if tool_results:
             user_text += "\n\n[Risultati tool di sistema]\n" + "\n".join(tool_results)
@@ -28,9 +31,18 @@ Tono per contesto:
 
         try:
             resp = self.client.messages.create(
-                model=model, max_tokens=1024, temperature=0.7,
+                model=model, max_tokens=max_tokens, temperature=0.7,
                 system=system, messages=[{"role": "user", "content": content}]
             )
-            return resp.content[0].text
+            if resp.content and len(resp.content) > 0 and hasattr(resp.content[0], 'text'):
+                return resp.content[0].text
+            return "Mi scusi, Signore, la risposta del server è vuota."
+        except RateLimitError as e:
+            logger.error(f"RateLimitError: {e}")
+            return "Mi scusi, Signore, il sistema è momentaneamente sovraccarico."
+        except APIConnectionError as e:
+            logger.error(f"APIConnectionError: {e}")
+            return "Mi scusi, Signore, la connessione con il server centrale è instabile."
         except Exception as e:
-            return f"Mi scusi, Signore, il sistema di comunicazione ha avuto un malfunzionamento: {e}"
+            logger.error(f"Unexpected error in JarvisLLM.ask: {e}")
+            return "Mi scusi, Signore, ho riscontrato un malfunzionamento tecnico."
