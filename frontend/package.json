@@ -38,11 +38,13 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon-jarvis.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
-  }
+  },
+  "description": "J.A.R.V.I.S. Prime — AI Assistant",
+  "author": "Amine"
 }
