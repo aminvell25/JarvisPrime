@@ -306,12 +306,12 @@ function connectCmd(){
   wsCmd.onmessage=(e)=>{
     const d=JSON.parse(e.data);
     switch(d.type){
-      case 'wake': setOrb('LISTENING'); updateHUD('In ascolto...','Listening'); break;
+      case 'wake': playMusic('./sounds/wake.wav');  setOrb('LISTENING'); updateHUD('In ascolto...','Listening'); break;
       case 'transcript_interim': updateHUD(d.text+'...','Hearing'); break;
       case 'transcript_final': updateHUD(d.text,'Processing'); setOrb('THINKING'); break;
-      case 'listening_timeout': updateHUD('Sistemi operativi, Signore.','Ready'); setOrb('IDLE'); break;
+      case 'listening_timeout': playMusic('./sounds/error.wav'); updateHUD('Sistemi operativi, Signore.','Ready'); setOrb('IDLE'); break;
       case 'thinking': showBubble('thinking',d.text||'Analizzo...'); break;
-      case 'jarvis_response': setOrb('SPEAKING'); typewriter(d.text); updateSub('Model: '+(d.model_used||'unknown')); break;
+      case 'jarvis_response': /* playMusic('./sounds/confirm.wav'); */ setOrb('SPEAKING'); typewriter(d.text); updateSub('Model: '+(d.model_used||'unknown')); break;
       case 'tts_chunk':
         if(d.audio)playTTSBase64(d.audio,d.format,d.sample_rate);
         else if(d.pcm)playTTS(new Uint8Array(d.pcm.split('').map(c=>c.charCodeAt(0))).buffer);
