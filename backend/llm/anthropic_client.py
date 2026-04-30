@@ -47,15 +47,15 @@ Tono per contesto:
         except RateLimitError as e:
             logger.error(f"RateLimitError: {e}")
             return "Mi scusi, Signore, il sistema è momentaneamente sovraccarico."
+        except APITimeoutError as e:
+            logger.error(f"APITimeoutError: {e}")
+            return "Mi scusi, Signore, il server sta impiegando troppo tempo a rispondere."
         except APIConnectionError as e:
             logger.error(f"APIConnectionError: {e}")
             return "Mi scusi, Signore, la connessione con il server centrale è instabile."
         except AuthenticationError as e:
             logger.error(f"AuthenticationError: {e}")
             return "Mi scusi, Signore, le credenziali di accesso non sono valide."
-        except APITimeoutError as e:
-            logger.error(f"APITimeoutError: {e}")
-            return "Mi scusi, Signore, il server sta impiegando troppo tempo a rispondere."
         except Exception as e:
             logger.error(f"Unexpected error in JarvisLLM.ask: {e}")
             return "Mi scusi, Signore, ho riscontrato un malfunzionamento tecnico."
