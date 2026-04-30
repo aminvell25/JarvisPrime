@@ -176,6 +176,25 @@ Si apre una finestra fullscreen nera con l'Orb blu al centro.
 
 ---
 
+## 🚀 STEP 6B: Avvio Automatico Windows
+
+In alternativa ai 3 terminali, puoi usare lo script:
+
+```text
+C:\Applicazioni GAME\jarvis-prime\start-jarvis.bat
+```
+
+Prima di usarlo:
+
+1. Clic destro su `start-jarvis.bat` → Modifica.
+2. Sostituisci `la-tua-chiave-qui` con le tue API key reali.
+3. Salva e chiudi.
+4. Doppio clic su `start-jarvis.bat`.
+
+Lo script avvia in sequenza Ollama, backend FastAPI e frontend Electron.
+
+---
+
 ## 🎮 STEP 7: Come Usarlo
 
 | Azione | Come si fa |
@@ -189,6 +208,63 @@ Si apre una finestra fullscreen nera con l'Orb blu al centro.
 | **Analizza schermo** | "Jarvis, guarda questo errore" |
 | **Coding** | "Jarvis, scrivi una funzione per..." |
 | **Status sistema** | "Jarvis, come va tutto?" |
+
+---
+
+## ✅ PARTE A: Checklist Test End-to-End
+
+### TEST 1: Orb visivo
+
+| Check | Come verificare |
+|-------|-----------------|
+| Orb centrale visibile | Dovrebbe essere un cerchio glowing cyan |
+| Anelli rotanti | 4 anelli concentrici in movimento |
+| Particelle esterne | Nuvola di punti cyan attorno all'orb |
+| Linee di connessione | Dovrebbero apparire in stato THINKING |
+| HUD in alto | Testo "Sistemi operativi, Signore." |
+| Orologio live | Orario che si aggiorna |
+
+### TEST 2: Audio
+
+| Check | Come verificare |
+|-------|-----------------|
+| Boot sound | Senti il suono power-up all'avvio |
+| Wake sound | Dici "Ehi Jarvis" → chime |
+| Error sound | Aspetta timeout → alert |
+| TTS voce Cesare | Chiedi qualcosa → voce italiana maschile |
+
+### TEST 3: WebSocket
+
+| Check | Come verificare |
+|-------|-----------------|
+| Nessun errore rosso in console DevTools | Premi `Ctrl+Shift+I` → tab Console |
+| Connected status | Punto verde in HUD |
+| Riconnessione automatica | Chiudi backend 2s → riapri → si riconnette |
+
+### TEST 4: Comandi vocali
+
+| Comando | Risultato atteso |
+|---------|------------------|
+| "Come stai?" | Risposta sarcastica JARVIS, max 30 parole |
+| "Apri VS Code" | Comando inviato a VS Code bridge |
+| "Cosa c'è in agenda?" | Richiesta a Claude + risposta |
+
+### TEST 5: Stati orb
+
+| Stato | Trigger | Visivo |
+|-------|---------|--------|
+| IDLE | Default | Rotazione lenta, breathing Z |
+| LISTENING | "Ehi Jarvis" | Particelle più attive |
+| THINKING | Dopo comando | Linee + elettroni bianchi |
+| SPEAKING | Risposta TTS | Pulsazione audio-driven |
+
+### Screenshot dei risultati
+
+Dopo aver completato i test, annota:
+
+- Quanti test sono passati, per esempio `4/5`.
+- Quali sono falliti e cosa hai visto.
+- Eventuali errori in console, copiati dalla tab Console di DevTools.
 
 ---
 
