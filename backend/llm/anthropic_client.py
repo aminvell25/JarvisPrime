@@ -1,7 +1,9 @@
 """Anthropic Client — Haiku + Sonnet"""
+from __future__ import annotations
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from anthropic import Anthropic, RateLimitError, APIConnectionError, AuthenticationError, APITimeoutError
+from anthropic.types import TextBlock
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +23,9 @@ Tono per contesto:
 - Banale: sarcasmo gentile
 - Frustrazione: piu diretto, meno ironico ma elegante"""
 
-    def ask(self, model: str, user_text: str, tool_results: list | None = None, mood_addon: str = "", vision_image: str | None = None, max_tokens: int = 1024) -> str:
+    def ask(self, model: str, user_text: str, tool_results: list | None = None,
+            mood_addon: str = "", vision_image: str | None = None,
+            max_tokens: int = 1024) -> str:
         system = self.base_personality + mood_addon
         if tool_results:
             user_text += "\n\n[Risultati tool di sistema]\n" + "\n".join(tool_results)
@@ -33,10 +37,12 @@ Tono per contesto:
         try:
             resp = self.client.messages.create(
                 model=model, max_tokens=max_tokens, temperature=0.7,
-                system=system, messages=[{"role": "user", "content": content}]
+                system=system, messages=[{"role": "user", "content": content}]  # type: ignore
             )
-            if resp.content and len(resp.content) > 0 and hasattr(resp.content[0], 'text'):
-                return resp.content[0].text
+            if resp.content and len(resp.content) > 0:
+                first_block = resp.content[0]
+                if isinstance(first_block, TextBlock):
+                    return first_block.text
             return "Mi scusi, Signore, la risposta del server è vuota."
         except RateLimitError as e:
             logger.error(f"RateLimitError: {e}")
