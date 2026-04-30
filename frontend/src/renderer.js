@@ -19,6 +19,8 @@ const STATES = {
 };
 
 let curState='IDLE', tgtState='IDLE', stTrans=0;
+let prevState='IDLE';
+let spinX=0, spinY=0, spinZ=0, transitionEnergy=0;
 
 import * as THREE from 'three';
 
@@ -187,6 +189,14 @@ const electronData=[];
 for(let i=0;i<ELECTRON_COUNT;i++){
   electronData.push({active:false,pos:new THREE.Vector3(),targetIdx:0,lineProgress:0,speed:0.003+Math.random()*0.003});
 }
+
+// World Group — Depth Breathing + Tumble container
+const worldGroup=new THREE.Group();
+scene.add(worldGroup);
+worldGroup.add(orb);
+rings.forEach(r=>worldGroup.add(r.mesh));
+worldGroup.add(glowSprite);
+worldGroup.add(particleGroup);
 
 let lineAmount=0.15;
 let currentRadius=PARTICLE_RADIUS;
@@ -504,6 +514,31 @@ function animate(){
     r.mesh.rotation.x+=Math.sin(et*0.3+i)*0.001;
   });
   updateParticleCloud(dt,et);
+  if(prevState!==curState){
+    transitionEnergy=1.0;
+    prevState=curState;
+  }
+  let targetZ;
+  switch(curState){
+    case 'IDLE': targetZ=Math.sin(et*0.12)*8; break;
+    case 'THINKING': targetZ=Math.sin(et*0.3)*15+Math.sin(et*0.9)*6; break;
+    case 'SPEAKING':{
+      const {bass}=getAudioBands();
+      targetZ=Math.sin(et*0.15)*6-bass*10;
+      break;
+    }
+    default: targetZ=Math.sin(et*0.12)*8;
+  }
+  worldGroup.position.z+=(targetZ-worldGroup.position.z)*dt*3;
+  if(transitionEnergy>0.01){
+    spinX+=0.012*Math.sin(et*1.7)*transitionEnergy;
+    spinY+=0.015*transitionEnergy;
+    spinZ+=0.008*Math.cos(et*1.3)*transitionEnergy;
+    transitionEnergy*=0.985;
+  }
+  worldGroup.rotation.x=spinX;
+  worldGroup.rotation.y=spinY;
+  worldGroup.rotation.z=spinZ;
   glowSprite.material.opacity=0.3+Math.sin(et*2)*0.1;
   glowSprite.scale.setScalar(6+Math.sin(et*1.5)*0.5);
   const mx=(window.mouseX||0)*0.001; const my=(window.mouseY||0)*0.001;
