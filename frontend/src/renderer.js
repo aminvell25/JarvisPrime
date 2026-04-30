@@ -139,12 +139,20 @@ const glowSprite=new THREE.Sprite(glowMat); glowSprite.scale.set(6,6,1); scene.a
 
 // Audio
 let audioCtx,analyser,micStream,micSource,ttsCtx,audioProcessor;
+let workletLoaded=false;
 async function initAudio(){
-  audioCtx=new(window.AudioContext||window.webkitAudioContext)({sampleRate:16000});
+  audioCtx=new(window.AudioContext||window.webkitAudioContext)();
   analyser=audioCtx.createAnalyser(); analyser.fftSize=CONFIG.FFT_SIZE;
-  micStream=await navigator.mediaDevices.getUserMedia({audio:{sampleRate:16000,channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+  micStream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
   micSource=audioCtx.createMediaStreamSource(micStream);
   micSource.connect(analyser);
+  try{
+    await audioCtx.audioWorklet.addModule('./audio-worklet.js');
+    workletLoaded=true;
+    console.log('AudioWorklet loaded');
+  }catch(err){
+    console.error('AudioWorklet load failed',err);
+  }
   console.log('Audio input sampleRate',audioCtx.sampleRate);
 }
 
@@ -259,41 +267,27 @@ function connectAudio(){
   wsAudio.onerror=()=>{updateSub('Audio socket error');};
   wsAudio.onclose=()=>{setTimeout(connectAudio,2000);};
 }
-function resampleTo16k(input,sourceRate){
-  if(sourceRate===CONFIG.AUDIO_SAMPLE_RATE)return input;
-  const ratio=sourceRate/CONFIG.AUDIO_SAMPLE_RATE;
-  const outLen=Math.floor(input.length/ratio);
-  const out=new Float32Array(outLen);
-  for(let i=0;i<outLen;i++){
-    const pos=i*ratio;
-    const idx=Math.floor(pos);
-    const frac=pos-idx;
-    const a=input[idx]||0;
-    const b=input[idx+1]||a;
-    out[i]=a+(b-a)*frac;
-  }
-  return out;
-}
-function startAudioStream(){
+async function startAudioStream(){
   if(!audioCtx||!micSource){
     updateSub('Microfono non inizializzato');
     return;
   }
   if(audioProcessor){
-    audioProcessor.disconnect();
+    try{audioProcessor.disconnect();}catch(e){}
     audioProcessor=null;
   }
-  const proc=audioCtx.createScriptProcessor(4096,1,1);
-  proc.onaudioprocess=(e)=>{
+  if(!workletLoaded){
+    updateSub('AudioWorklet non caricato');
+    return;
+  }
+  const node=new AudioWorkletNode(audioCtx,'resample-processor');
+  node.port.onmessage=(ev)=>{
     if(wsAudio.readyState===WebSocket.OPEN){
-      const input=resampleTo16k(e.inputBuffer.getChannelData(0),audioCtx.sampleRate);
-      const i16=new Int16Array(input.length);
-      for(let i=0;i<input.length;i++)i16[i]=Math.max(-1,Math.min(1,input[i]))*0x7FFF;
-      wsAudio.send(i16.buffer);
+      wsAudio.send(ev.data);
     }
   };
-  audioProcessor=proc;
-  micSource.connect(proc); proc.connect(audioCtx.destination);
+  micSource.connect(node);
+  audioProcessor=node;
 }
 
 
