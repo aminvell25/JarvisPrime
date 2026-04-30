@@ -21,7 +21,7 @@ Tono per contesto:
 - Banale: sarcasmo gentile
 - Frustrazione: piu diretto, meno ironico ma elegante"""
 
-    def ask(self, model: str, user_text: str, tool_results: list = None, mood_addon: str = "", vision_image: str = None, max_tokens: int = 1024) -> str:
+    def ask(self, model: str, user_text: str, tool_results: list | None = None, mood_addon: str = "", vision_image: str | None = None, max_tokens: int = 1024) -> str:
         system = self.base_personality + mood_addon
         if tool_results:
             user_text += "\n\n[Risultati tool di sistema]\n" + "\n".join(tool_results)
