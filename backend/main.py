@@ -432,6 +432,7 @@ async def proactive_loop():
 # ============================================================
 @app.on_event("startup")
 async def startup():
+    await vscode.connect()
     asyncio.create_task(bus.run())
     asyncio.create_task(proactive_loop())
     print("=" * 60)
