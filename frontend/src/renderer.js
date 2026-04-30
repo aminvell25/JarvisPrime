@@ -302,7 +302,7 @@ function playMusic(file){
 let wsCmd,wsAudio;
 function connectCmd(){
   wsCmd=new WebSocket(CONFIG.WS_CMD);
-  wsCmd.onopen=()=>{updateHUD('Sistemi operativi, Signore.','Connected'); setOrb('IDLE');};
+  wsCmd.onopen=()=>{playMusic('./sounds/boot.wav'); updateHUD('Sistemi operativi, Signore.','Connected'); setOrb('IDLE');};
   wsCmd.onmessage=(e)=>{
     const d=JSON.parse(e.data);
     switch(d.type){
