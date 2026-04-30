@@ -20,7 +20,7 @@ const STATES = {
 
 let curState='IDLE', tgtState='IDLE', stTrans=0;
 
-import * as THREE from './node_modules/three/build/three.module.js';
+import * as THREE from 'three';
 
 const scene=new THREE.Scene();
 scene.fog=new THREE.FogExp2(0x000000,0.02);

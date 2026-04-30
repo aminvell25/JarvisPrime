@@ -1,18 +1,21 @@
 {
   "name": "jarvis-prime-orb",
   "version": "1.0.0",
-  "main": "main.js",
+  "type": "module",
+  "main": "./main.cjs",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev",
-    "build": "electron-builder"
+    "dev": "vite",
+    "build": "vite build",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "three": "^0.160.0"
   },
   "devDependencies": {
     "electron": "^28.0.0",
-    "electron-builder": "^24.0.0"
+    "electron-builder": "^24.0.0",
+    "vite": "^6.3.0"
   },
   "build": {
     "appId": "com.stark.jarvis",

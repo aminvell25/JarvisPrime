@@ -1,4 +1,6 @@
 const { app, BrowserWindow, session } = require('electron');
+const path = require('path');
+const fs = require('fs');
 
 let win;
 
@@ -21,7 +23,12 @@ function createWindow() {
   win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
   });
-  win.loadFile('index.html');
+  const distPath = path.join(__dirname, 'dist', 'index.html');
+  if (fs.existsSync(distPath)) {
+    win.loadFile(distPath);
+  } else {
+    win.loadFile('index.html');
+  }
 }
 
 app.whenReady().then(createWindow);
