@@ -137,6 +137,68 @@ const glowMat=new THREE.SpriteMaterial({map:glowTex,color:0x00d9ff,transparent:t
 const glowSprite=new THREE.Sprite(glowMat); glowSprite.scale.set(6,6,1); scene.add(glowSprite);
 
 
+// ===================== PARTICLE CLOUD SYSTEM (PROMPT 4) =====================
+const PARTICLE_COUNT=1500;
+const PARTICLE_RADIUS=3.5;
+const PARTICLE_MIN_RADIUS=2.5;
+const PARTICLE_MAX_RADIUS=5.0;
+
+const particleGroup=new THREE.Group();
+scene.add(particleGroup);
+
+// Particelle
+const pcGeo=new THREE.BufferGeometry();
+const pcPos=new Float32Array(PARTICLE_COUNT*3);
+const pcVel=new Float32Array(PARTICLE_COUNT*3);
+const pcPhase=new Float32Array(PARTICLE_COUNT);
+const pcBasePos=new Float32Array(PARTICLE_COUNT*3);
+
+for(let i=0;i<PARTICLE_COUNT;i++){
+  const phi=Math.acos(2*Math.random()-1);
+  const theta=Math.random()*Math.PI*2;
+  const r=PARTICLE_MIN_RADIUS+Math.random()*(PARTICLE_MAX_RADIUS-PARTICLE_MIN_RADIUS);
+  const x=r*Math.sin(phi)*Math.cos(theta);
+  const y=r*Math.sin(phi)*Math.sin(theta);
+  const z=r*Math.cos(phi);
+  pcPos[i*3]=x; pcPos[i*3+1]=y; pcPos[i*3+2]=z;
+  pcBasePos[i*3]=x; pcBasePos[i*3+1]=y; pcBasePos[i*3+2]=z;
+  pcVel[i*3]=(Math.random()-0.5)*0.01;
+  pcVel[i*3+1]=(Math.random()-0.5)*0.01;
+  pcVel[i*3+2]=(Math.random()-0.5)*0.01;
+  pcPhase[i]=Math.random()*Math.PI*2;
+}
+pcGeo.setAttribute('position',new THREE.BufferAttribute(pcPos,3));
+const pcMat=new THREE.PointsMaterial({size:0.04,color:0x4ca8e8,transparent:true,opacity:0.7,blending:THREE.AdditiveBlending,depthWrite:false});
+const particleCloud=new THREE.Points(pcGeo,pcMat);
+particleGroup.add(particleCloud);
+
+// Linee di connessione
+const MAX_LINES=4000;
+const lineGeo=new THREE.BufferGeometry();
+const linePos=new Float32Array(MAX_LINES*6);
+lineGeo.setAttribute('position',new THREE.BufferAttribute(linePos,3));
+const lineMat=new THREE.LineBasicMaterial({color:0x4ca8e8,transparent:true,opacity:0.12,blending:THREE.AdditiveBlending,depthWrite:false});
+const lineMesh=new THREE.LineSegments(lineGeo,lineMat);
+particleGroup.add(lineMesh);
+
+// Elettroni
+const ELECTRON_COUNT=3;
+const electronGeo=new THREE.BufferGeometry();
+const electronPos=new Float32Array(ELECTRON_COUNT*3);
+electronGeo.setAttribute('position',new THREE.BufferAttribute(electronPos,3));
+const electronMat=new THREE.PointsMaterial({size:0.08,color:0xffffff,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false});
+const electrons=new THREE.Points(electronGeo,electronMat);
+particleGroup.add(electrons);
+
+const electronData=[];
+for(let i=0;i<ELECTRON_COUNT;i++){
+  electronData.push({active:false,pos:new THREE.Vector3(),targetIdx:0,lineProgress:0,speed:0.003+Math.random()*0.003});
+}
+
+let lineAmount=1.0;
+let currentRadius=PARTICLE_RADIUS;
+
+
 // Audio
 let audioCtx,analyser,micStream,micSource,ttsCtx,audioProcessor;
 let workletLoaded=false;
@@ -336,6 +398,105 @@ function showBubble(id,txt){
 setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleTimeString('it-IT'),1000);
 
 
+function getAudioBands(){
+  if(!analyser) return {bass:0,mid:0};
+  const data=new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const binCount=data.length;
+  const bassEnd=Math.floor(binCount*0.1);
+  const midEnd=Math.floor(binCount*0.5);
+  let bass=0,mid=0;
+  for(let i=0;i<bassEnd;i++)bass+=data[i];
+  for(let i=bassEnd;i<midEnd;i++)mid+=data[i];
+  bass=bassEnd>0?(bass/bassEnd)/255:0;
+  mid=(midEnd-bassEnd)>0?(mid/(midEnd-bassEnd))/255:0;
+  return {bass,mid};
+}
+
+function updateParticleCloud(dt,et){
+  const {bass,mid}=getAudioBands();
+  const targetRadius=bass>0.05?PARTICLE_MAX_RADIUS:PARTICLE_RADIUS;
+  currentRadius+=(targetRadius-currentRadius)*dt*2;
+  const pulse=(curState==='SPEAKING'&&mid>0.1)?Math.sin(et*8)*0.3:0;
+  const positions=pcGeo.attributes.position.array;
+  for(let i=0;i<PARTICLE_COUNT;i++){
+    const idx=i*3;
+    const phase=pcPhase[i];
+    pcVel[idx]*=0.992; pcVel[idx+1]*=0.992; pcVel[idx+2]*=0.992;
+    const nx=pcBasePos[idx]+Math.sin(et*0.3+phase)*0.2;
+    const ny=pcBasePos[idx+1]+Math.cos(et*0.2+phase)*0.2;
+    const nz=pcBasePos[idx+2]+Math.sin(et*0.25+phase)*0.2;
+    const len=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
+    const scale=(currentRadius+pulse)/len;
+    positions[idx]=nx*scale+pcVel[idx];
+    positions[idx+1]=ny*scale+pcVel[idx+1];
+    positions[idx+2]=nz*scale+pcVel[idx+2];
+  }
+  pcGeo.attributes.position.needsUpdate=true;
+  if(lineAmount<0.01){
+    lineMesh.visible=false;
+  }else{
+    lineMesh.visible=true;
+    const linePositions=lineGeo.attributes.position.array;
+    let lineIdx=0;
+    const maxDistSq=6.0*6.0;
+    const step=3;
+    for(let i=0;i<PARTICLE_COUNT&&lineIdx<MAX_LINES*6;i+=step){
+      const ix=positions[i*3],iy=positions[i*3+1],iz=positions[i*3+2];
+      for(let j=i+1;j<PARTICLE_COUNT&&lineIdx<MAX_LINES*6;j+=step){
+        const dx=ix-positions[j*3];
+        const dy=iy-positions[j*3+1];
+        const dz=iz-positions[j*3+2];
+        const distSq=dx*dx+dy*dy+dz*dz;
+        if(distSq<maxDistSq){
+          linePositions[lineIdx++]=ix;
+          linePositions[lineIdx++]=iy;
+          linePositions[lineIdx++]=iz;
+          linePositions[lineIdx++]=positions[j*3];
+          linePositions[lineIdx++]=positions[j*3+1];
+          linePositions[lineIdx++]=positions[j*3+2];
+        }
+      }
+    }
+    for(let k=lineIdx;k<MAX_LINES*6;k++)linePositions[k]=0;
+    lineGeo.attributes.position.needsUpdate=true;
+    lineMat.opacity=0.12*lineAmount;
+  }
+  const electronPositions=electronGeo.attributes.position.array;
+  const isThinking=curState==='THINKING';
+  for(let i=0;i<ELECTRON_COUNT;i++){
+    const e=electronData[i];
+    if(!e.active){
+      if(isThinking&&Math.random()<0.02){
+        e.active=true;e.lineProgress=0;e.targetIdx=Math.floor(Math.random()*PARTICLE_COUNT);
+        e.speed=0.003+Math.random()*0.003;
+      }
+    }else{
+      const tIdx=e.targetIdx;
+      const ex=positions[tIdx*3],ey=positions[tIdx*3+1],ez=positions[tIdx*3+2];
+      let found=false,nx=ex,ny=ey,nz=ez;
+      for(let j=0;j<PARTICLE_COUNT&&!found;j+=5){
+        const dx=ex-positions[j*3];
+        const dy=ey-positions[j*3+1];
+        const dz=ez-positions[j*3+2];
+        if(dx*dx+dy*dy+dz*dz<36){nx=positions[j*3];ny=positions[j*3+1];nz=positions[j*3+2];e.targetIdx=j;found=true;}
+      }
+      e.lineProgress+=e.speed;
+      if(e.lineProgress>=1||!isThinking){
+        e.active=false;
+        electronPositions[i*3]=0;electronPositions[i*3+1]=0;electronPositions[i*3+2]=0;
+      }else{
+        electronPositions[i*3]=ex+(nx-ex)*e.lineProgress;
+        electronPositions[i*3+1]=ey+(ny-ey)*e.lineProgress;
+        electronPositions[i*3+2]=ez+(nz-ez)*e.lineProgress;
+      }
+    }
+  }
+  electronGeo.attributes.position.needsUpdate=true;
+  particleGroup.rotation.y=et*0.03;
+  particleGroup.rotation.x=Math.sin(et*0.08)*0.05;
+}
+
 // Render Loop
 const clock=new THREE.Clock();
 function animate(){
@@ -348,6 +509,7 @@ function animate(){
     r.mesh.rotation.x+=Math.sin(et*0.3+i)*0.001;
   });
   particles.rotation.y=et*0.05; particles.rotation.x=Math.sin(et*0.1)*0.1;
+  updateParticleCloud(dt,et);
   glowSprite.material.opacity=0.3+Math.sin(et*2)*0.1;
   glowSprite.scale.setScalar(6+Math.sin(et*1.5)*0.5);
   const mx=(window.mouseX||0)*0.001; const my=(window.mouseY||0)*0.001;
