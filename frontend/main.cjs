@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session } = require('electron');
+const { app, BrowserWindow, session, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -12,8 +12,9 @@ function createWindow() {
     frame: false,
     fullscreen: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
       webAudio: true
     }
   });
@@ -30,6 +31,16 @@ function createWindow() {
     win.loadFile('index.html');
   }
 }
+
+// IPC handlers per comunicazione con renderer
+ipcMain.on('audio-data', (_event, buffer) => {
+  // Placeholder: qui si può processare audio dal renderer se necessario
+  console.log('Received audio buffer from renderer', buffer?.byteLength || 0);
+});
+
+ipcMain.on('renderer-log', (_event, { level, message }) => {
+  console.log(`[renderer:${level}] ${message}`);
+});
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());
