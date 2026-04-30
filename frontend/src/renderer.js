@@ -117,14 +117,7 @@ const rings=[
 ];
 rings.forEach(r=>scene.add(r.mesh));
 
-// Particelle
-const pGeo=new THREE.BufferGeometry();
-const pCnt=800;
-const pArr=new Float32Array(pCnt*3);
-for(let i=0;i<pCnt*3;i++)pArr[i]=(Math.random()-0.5)*12;
-pGeo.setAttribute('position',new THREE.BufferAttribute(pArr,3));
-const pMat=new THREE.PointsMaterial({size:0.03,color:0x00d9ff,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending});
-const particles=new THREE.Points(pGeo,pMat); scene.add(particles);
+// Particelle legacy rimosse — ora usa particle cloud system (1500 particelle)
 
 // Glow sprite
 const cvs=document.createElement('canvas'); cvs.width=128; cvs.height=128;
@@ -195,7 +188,7 @@ for(let i=0;i<ELECTRON_COUNT;i++){
   electronData.push({active:false,pos:new THREE.Vector3(),targetIdx:0,lineProgress:0,speed:0.003+Math.random()*0.003});
 }
 
-let lineAmount=1.0;
+let lineAmount=0.15;
 let currentRadius=PARTICLE_RADIUS;
 
 
@@ -414,6 +407,8 @@ function getAudioBands(){
 }
 
 function updateParticleCloud(dt,et){
+  const targetLine={IDLE:0.15,LISTENING:0.4,THINKING:1.0,SPEAKING:0.8,BANTER:0.6,ALERT:0.3,SYSTEM:0.5,INTRO:0.9}[curState]||0.15;
+  lineAmount+=(targetLine-lineAmount)*dt*2;
   const {bass,mid}=getAudioBands();
   const targetRadius=bass>0.05?PARTICLE_MAX_RADIUS:PARTICLE_RADIUS;
   currentRadius+=(targetRadius-currentRadius)*dt*2;
@@ -508,7 +503,6 @@ function animate(){
     r.mesh.rotation.z+=r.speed*dt*(0.5+Math.sin(et*0.5+i)*0.2);
     r.mesh.rotation.x+=Math.sin(et*0.3+i)*0.001;
   });
-  particles.rotation.y=et*0.05; particles.rotation.x=Math.sin(et*0.1)*0.1;
   updateParticleCloud(dt,et);
   glowSprite.material.opacity=0.3+Math.sin(et*2)*0.1;
   glowSprite.scale.setScalar(6+Math.sin(et*1.5)*0.5);
