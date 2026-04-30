@@ -203,7 +203,8 @@ let currentRadius=PARTICLE_RADIUS;
 
 
 // Audio
-let audioCtx,analyser,micStream,micSource,ttsCtx,audioProcessor;
+let audioCtx,analyser,micStream,micSource,ttsCtx,ttsAnalyser,audioProcessor;
+const currentTtsSources=new Set();
 let workletLoaded=false;
 async function initAudio(){
   audioCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -227,9 +228,14 @@ const wCtx=wCvs.getContext('2d'); wCvs.width=400; wCvs.height=60;
 function drawWave(){
   wCtx.fillStyle='rgba(0,0,0,0.3)';
   wCtx.fillRect(0,0,wCvs.width,wCvs.height);
-  const data=new Uint8Array(analyser.frequencyBinCount);
-  if(curState==='SPEAKING'||curState==='BANTER'||curState==='INTRO')analyser.getByteTimeDomainData(data);
-  else analyser.getByteFrequencyData(data);
+  const activeAnalyser=getActiveAnalyser();
+  if(!activeAnalyser){
+    requestAnimationFrame(drawWave);
+    return;
+  }
+  const data=new Uint8Array(activeAnalyser.frequencyBinCount);
+  if(curState==='SPEAKING'||curState==='BANTER'||curState==='INTRO')activeAnalyser.getByteTimeDomainData(data);
+  else activeAnalyser.getByteFrequencyData(data);
   wCtx.beginPath();
   wCtx.strokeStyle=(curState==='SPEAKING'||curState==='BANTER'||curState==='INTRO')?'#00ff9f':'#00d9ff';
   wCtx.lineWidth=2;
@@ -250,14 +256,39 @@ function isWavBuffer(buffer){
   return v[0]===0x52&&v[1]===0x49&&v[2]===0x46&&v[3]===0x46;
 }
 
-function playTTS(pcm,sr=24000){
+function ensureTTSContext(sr=24000){
   if(!ttsCtx)ttsCtx=new AudioContext({sampleRate:sr});
+  if(!ttsAnalyser){
+    ttsAnalyser=ttsCtx.createAnalyser();
+    ttsAnalyser.fftSize=CONFIG.FFT_SIZE;
+    ttsAnalyser.connect(ttsCtx.destination);
+  }
+}
+
+function playTTSBuffer(audioBuffer){
+  ensureTTSContext(audioBuffer.sampleRate||24000);
+  const src=ttsCtx.createBufferSource();
+  src.buffer=audioBuffer;
+  src.connect(ttsAnalyser);
+  currentTtsSources.add(src);
+  src.onended=()=>currentTtsSources.delete(src);
+  src.start();
+}
+
+function stopTTS(){
+  for(const src of currentTtsSources){
+    try{src.stop();}catch(e){}
+  }
+  currentTtsSources.clear();
+}
+
+function playTTS(pcm,sr=24000){
+  ensureTTSContext(sr);
   // Protezione: se arriva un WAV container invece di raw PCM
   if(isWavBuffer(pcm)){
     console.warn('playTTS received WAV container, routing to decodeAudioData');
     ttsCtx.decodeAudioData(pcm.slice(0)).then(buf=>{
-      const src=ttsCtx.createBufferSource();
-      src.buffer=buf; src.connect(ttsCtx.destination); src.start();
+      playTTSBuffer(buf);
     }).catch(err=>console.error('WAV decode failed',err));
     return;
   }
@@ -266,19 +297,17 @@ function playTTS(pcm,sr=24000){
   for(let i=0;i<i16.length;i++)f32[i]=i16[i]/32768.0;
   const buf=ttsCtx.createBuffer(1,f32.length,sr);
   buf.copyToChannel(f32,0);
-  const src=ttsCtx.createBufferSource();
-  src.buffer=buf; src.connect(ttsCtx.destination); src.start();
+  playTTSBuffer(buf);
 }
 
 async function playTTSBase64(payload, format='linear16', sr=24000){
-  if(!ttsCtx)ttsCtx=new AudioContext({sampleRate:sr});
+  ensureTTSContext(sr);
   const bin=atob(payload);
   const bytes=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
   if(format==='wav'||isWavBuffer(bytes.buffer)){
     const audioBuffer=await ttsCtx.decodeAudioData(bytes.buffer.slice(0));
-    const src=ttsCtx.createBufferSource();
-    src.buffer=audioBuffer; src.connect(ttsCtx.destination); src.start();
+    playTTSBuffer(audioBuffer);
     return;
   }
   // Path PCM raw: Uint8Array → Int16Array → Float32Array
@@ -287,14 +316,13 @@ async function playTTSBase64(payload, format='linear16', sr=24000){
   for(let i=0;i<i16.length;i++)f32[i]=i16[i]/32768.0;
   const buf=ttsCtx.createBuffer(1,f32.length,sr);
   buf.copyToChannel(f32,0);
-  const src=ttsCtx.createBufferSource();
-  src.buffer=buf; src.connect(ttsCtx.destination); src.start();
+  playTTSBuffer(buf);
 }
 
 // Music play
 function playMusic(file){
   const a=new Audio(file);
-  a.volume=0.6; a.play();
+  a.volume=0.6; a.play().catch(err=>console.warn('Music play failed',err));
 }
 
 
@@ -313,9 +341,10 @@ function connectCmd(){
       case 'thinking': showBubble('thinking',d.text||'Analizzo...'); break;
       case 'jarvis_response': /* playMusic('./sounds/confirm.wav'); */ setOrb('SPEAKING'); typewriter(d.text); updateSub('Model: '+(d.model_used||'unknown')); break;
       case 'tts_chunk':
-        if(d.audio)playTTSBase64(d.audio,d.format,d.sample_rate);
+        if(d.audio)playTTSBase64(d.audio,d.format,d.sample_rate).catch(err=>console.error('TTS playback failed',err));
         else if(d.pcm)playTTS(new Uint8Array(d.pcm.split('').map(c=>c.charCodeAt(0))).buffer);
         break;
+      case 'barge_in': stopTTS(); setOrb('LISTENING'); updateHUD('Interrotto. In ascolto...','Barge-in'); break;
       case 'banter_trigger': setOrb('BANTER'); typewriter(d.text); updateSub('Banter'); break;
       case 'system_alert': setOrb('ALERT'); updateHUD(d.text,'Alert'); setTimeout(()=>setOrb('IDLE'),3000); break;
       case 'intro': setOrb('INTRO'); updateHUD('Modalita spettacolo','Intro'); break;
@@ -402,9 +431,10 @@ setInterval(()=>document.getElementById('clock').textContent=new Date().toLocale
 
 
 function getAudioBands(){
-  if(!analyser) return {bass:0,mid:0};
-  const data=new Uint8Array(analyser.frequencyBinCount);
-  analyser.getByteFrequencyData(data);
+  const activeAnalyser=getActiveAnalyser();
+  if(!activeAnalyser) return {bass:0,mid:0};
+  const data=new Uint8Array(activeAnalyser.frequencyBinCount);
+  activeAnalyser.getByteFrequencyData(data);
   const binCount=data.length;
   const bassEnd=Math.floor(binCount*0.1);
   const midEnd=Math.floor(binCount*0.5);
@@ -414,6 +444,11 @@ function getAudioBands(){
   bass=bassEnd>0?(bass/bassEnd)/255:0;
   mid=(midEnd-bassEnd)>0?(mid/(midEnd-bassEnd))/255:0;
   return {bass,mid};
+}
+
+function getActiveAnalyser(){
+  if((curState==='SPEAKING'||curState==='BANTER'||curState==='INTRO')&&ttsAnalyser)return ttsAnalyser;
+  return analyser;
 }
 
 function updateParticleCloud(dt,et){

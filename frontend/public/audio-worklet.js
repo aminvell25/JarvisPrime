@@ -8,7 +8,7 @@ class ResampleProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.buffer = [];
-    this.targetSize = 4096;   // campioni accumulati al sampleRate nativo
+    this.targetSize = 1024;   // chunk brevi per ridurre la latenza microfono -> backend
     this.outputRate = 16000;  // target sample rate
   }
 

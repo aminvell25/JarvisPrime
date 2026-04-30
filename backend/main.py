@@ -4,12 +4,14 @@ Proprietario: Amine | Signore
 """
 import asyncio
 import base64
+import io
 import json
 import os
 import random
 import sys
 import time
 import traceback
+import wave
 from datetime import datetime
 from pathlib import Path
 
@@ -53,6 +55,10 @@ from backend.brain.obsidian_bridge import ObsidianBridge
 Config.ensure_dirs()
 app = FastAPI(title="J.A.R.V.I.S. Prime", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+@app.get("/health")
+def health():
+    return {"ok": True, "service": "jarvis-prime"}
 
 # Componenti
 bus = EventBus()
@@ -114,6 +120,22 @@ async def broadcast_tts_audio(audio: bytes):
         "sample_rate": 24000
     })
 
+def estimate_audio_duration(audio: bytes, fallback_sample_rate: int = 24000) -> float:
+    if not audio:
+        return 0.0
+    if audio[:4] == b"RIFF":
+        try:
+            with wave.open(io.BytesIO(audio), "rb") as wf:
+                rate = wf.getframerate() or fallback_sample_rate
+                return wf.getnframes() / rate
+        except Exception:
+            return 0.0
+    return len(audio) / 2 / fallback_sample_rate
+
+def speech_energy_detected(pcm: np.ndarray) -> bool:
+    energy = np.sqrt(np.mean(pcm.astype(np.float32) ** 2)) / 32768.0
+    return energy > max(Config.VAD_THRESHOLD * 1.5, 0.025)
+
 # ============================================================
 # SOCKET B — Comandi + Risposte + UI State
 # ============================================================
@@ -151,7 +173,7 @@ async def ws_audio(websocket: WebSocket):
     audio_clients.add(websocket)
     print("Socket A connesso")
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     stt = None
     buffer = []
     is_listening = False
@@ -165,7 +187,7 @@ async def ws_audio(websocket: WebSocket):
             pcm = np.frombuffer(data, dtype=np.int16)
 
             # Barge-in
-            if barge.tts_playing and vad.is_speaking:
+            if barge.tts_playing and speech_energy_detected(pcm):
                 interrupted = barge.on_user_speak()
                 if interrupted:
                     await broadcast({"type": "barge_in", "action": "stop_tts"})
@@ -213,6 +235,17 @@ async def ws_audio(websocket: WebSocket):
                 buffer.append(pcm)
 
                 should_finish = False
+                while not stt.queue.empty():
+                    event = stt.queue.get_nowait()
+                    event_type = event.get("type")
+                    event_text = event.get("text", "")
+                    if event_type == "interim" and event_text:
+                        await broadcast({"type": "transcript_interim", "text": event_text})
+                    elif event_type == "final" and event_text:
+                        await broadcast({"type": "transcript_interim", "text": event_text})
+                    elif event_type == "utterance_end":
+                        should_finish = True
+
                 vad_finished = vad.process(pcm)
                 if len(buffer) > 10 and vad_finished:
                     should_finish = True
@@ -263,7 +296,7 @@ async def do_intro_mode():
             await broadcast({"type": "play_music", "file": str(random.choice(files))})
 
     # TTS frase
-    pcm = tts.speak(phrase)
+    pcm = await asyncio.to_thread(tts.speak, phrase)
     if pcm:
         await broadcast_tts_audio(pcm)
 
@@ -288,7 +321,7 @@ async def process_input(user_text: str, websocket):
     state_machine.transition(State.THINKING)
     await broadcast({"type": "thinking", "text": "Analizzo..."})
 
-    decision = router.route(user_text)
+    decision = await asyncio.to_thread(router.route, user_text)
     target = decision.get("target", "haiku")
     tool_names = decision.get("tools", [])
 
@@ -307,7 +340,7 @@ async def process_input(user_text: str, websocket):
         model = Config.CLAUDE_HAIKU_MODEL
 
     mood_addon = mood.addon()
-    response = llm.ask(model, user_text, tool_results, mood_addon)
+    response = await asyncio.to_thread(llm.ask, model, user_text, tool_results, mood_addon)
 
     # 5. DELIVER
     await deliver_response(response, target, tool_names, websocket)
@@ -318,10 +351,6 @@ async def deliver_response(text: str, model_used: str, tools_used: list, websock
     state_machine.transition(State.SPEAKING)
     barge.on_tts_start()
 
-    pcm = tts.speak(text)
-    if pcm:
-        await broadcast_tts_audio(pcm)
-
     await broadcast({
         "type": "jarvis_response",
         "text": text,
@@ -329,8 +358,14 @@ async def deliver_response(text: str, model_used: str, tools_used: list, websock
         "tools_used": tools_used
     })
 
-    barge.on_tts_end()
-    state_machine.transition(State.IDLE)
+    pcm = await asyncio.to_thread(tts.speak, text)
+    if pcm:
+        await broadcast_tts_audio(pcm)
+        await asyncio.sleep(min(estimate_audio_duration(pcm), 30.0))
+
+    if barge.tts_playing:
+        barge.on_tts_end()
+        state_machine.transition(State.IDLE)
 
 async def execute_tool(name: str, user_text: str) -> str:
     if name == "system_status":
@@ -387,7 +422,7 @@ Il suo ambiente e pronto, Signore. Oggi e una buona giornata per costruire."""
     tools.open_browser("https://news.ycombinator.com")
     tools.open_browser("https://www.reddit.com/r/LocalLLaMA/")
 
-    pcm = tts.speak(text)
+    pcm = await asyncio.to_thread(tts.speak, text)
     if pcm:
         await broadcast_tts_audio(pcm)
 
@@ -397,9 +432,14 @@ Il suo ambiente e pronto, Signore. Oggi e una buona giornata per costruire."""
 async def do_screen_analysis(context: str):
     img = screen.capture()
     if img:
-        response = llm.ask(Config.CLAUDE_SONNET_MODEL, f"Analizza lo schermo. Contesto: {context}", vision_image=img)
+        response = await asyncio.to_thread(
+            llm.ask,
+            Config.CLAUDE_SONNET_MODEL,
+            f"Analizza lo schermo. Contesto: {context}",
+            vision_image=img,
+        )
         await broadcast({"type": "jarvis_response", "text": response, "model_used": "sonnet-vision", "tools_used": ["screen_analyze"]})
-        pcm = tts.speak(response)
+        pcm = await asyncio.to_thread(tts.speak, response)
         if pcm:
             await broadcast_tts_audio(pcm)
 

@@ -1,5 +1,6 @@
 """Mood Tracker — Stabile con hysteresis"""
 import json
+import random
 from pathlib import Path
 from datetime import datetime
 

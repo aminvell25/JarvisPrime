@@ -25,7 +25,7 @@ timeout /t 4 /nobreak >nul
 
 :: === 3. VERIFICA BACKEND ===
 echo [3/4] Verifica connessione backend...
-powershell -NoProfile -Command "(Invoke-WebRequest -Uri 'http://localhost:8000' -TimeoutSec 5 -ErrorAction SilentlyContinue).StatusCode" >nul 2>&1
+powershell -NoProfile -Command "(Invoke-WebRequest -Uri 'http://localhost:8000/health' -TimeoutSec 5 -ErrorAction SilentlyContinue).StatusCode" >nul 2>&1
 if %errorlevel% neq 0 (
     echo Backend non pronto, attendo ulteriori 3 secondi...
     timeout /t 3 /nobreak >nul
