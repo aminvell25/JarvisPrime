@@ -1,6 +1,7 @@
 """Anthropic Client — Haiku + Sonnet"""
 from __future__ import annotations
 import logging
+from typing import Any
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 from anthropic import Anthropic, RateLimitError, APIConnectionError, AuthenticationError, APITimeoutError
 from anthropic.types import TextBlock
@@ -30,7 +31,7 @@ Tono per contesto:
         if tool_results:
             user_text += "\n\n[Risultati tool di sistema]\n" + "\n".join(tool_results)
 
-        content = [{"type": "text", "text": user_text}]
+        content: list[dict[str, Any]] = [{"type": "text", "text": user_text}]
         if vision_image:
             content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": vision_image}})
 
