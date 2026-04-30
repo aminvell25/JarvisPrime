@@ -21,7 +21,7 @@
     "appId": "com.stark.jarvis",
     "productName": "JARVIS Prime",
     "directories": {
-      "output": "dist-electron-build"
+      "output": "dist-electron"
     },
     "files": [
       "dist/**/*",
